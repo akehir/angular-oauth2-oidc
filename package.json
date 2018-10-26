@@ -50,7 +50,7 @@
     "@types/jasmine": "~2.6.3",
     "@types/jasminewd2": "~2.0.3",
     "@types/node": "~8.0.51",
-    "angular-oauth2-oidc": "^5.0.2",
+    "angular-oauth2-oidc": "file:./dist/lib",
     "codelyzer": "~4.2.1",
     "cpr": "^3.0.1",
     "jasmine-core": "~2.8.0",

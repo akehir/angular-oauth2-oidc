@@ -91,6 +91,8 @@ export class OAuthService extends AuthConfig {
     ) {
         super();
 
+        this.logger.log('logger construct');
+
         this.discoveryDocumentLoaded$ = this.discoveryDocumentLoadedSubject.asObservable();
         this.events = this.eventsSubject.asObservable();
 
@@ -418,12 +420,15 @@ export class OAuthService extends AuthConfig {
                         this.restartSessionChecksIfStillLoggedIn();
                     }
 
+                  this.logger.log('starting to load jwks');
+
                     this.loadJwks()
                         .then(jwks => {
                             const result: object = {
                                 discoveryDocument: doc,
                                 jwks: jwks
                             };
+                          this.logger.log('loaded jwks');
 
                             const event = new OAuthSuccessEvent(
                                 'discovery_document_loaded',
@@ -434,6 +439,7 @@ export class OAuthService extends AuthConfig {
                             return;
                         })
                         .catch(err => {
+                          this.logger.log('error loading jwks');
                             this.eventsSubject.next(
                                 new OAuthErrorEvent('discovery_document_load_error', err)
                             );
@@ -1179,6 +1185,7 @@ export class OAuthService extends AuthConfig {
             return;
         }
 
+      this.logger.log('is internal impliclit flow');
         this.inImplicitFlow = true;
 
         if (!this.validateUrlForHttps(this.loginUrl)) {
@@ -1198,6 +1205,7 @@ export class OAuthService extends AuthConfig {
 
         this.createLoginUrl(additionalState, loginHint, null, false, addParams)
             .then(function (url) {
+              console.log('redirecting to: ', url);
                 location.href = url;
             })
             .catch(error => {
@@ -1219,7 +1227,9 @@ export class OAuthService extends AuthConfig {
         additionalState = '',
         params: string | object = ''
     ): void {
+      this.logger.log('initiating implicit flow');
         if (this.loginUrl !== '') {
+          this.logger.log('implicit flow with login url');
             this.initImplicitFlowInternal(additionalState, params);
         } else {
             this.events
@@ -1275,6 +1285,8 @@ export class OAuthService extends AuthConfig {
     public tryLogin(options: LoginOptions = null): Promise<boolean> {
         options = options || {};
 
+      this.logger.log('evaluating login tokens.');
+
         let parts: object;
 
         if (options.customHashFragment) {
@@ -1284,6 +1296,7 @@ export class OAuthService extends AuthConfig {
         }
 
         this.debug('parsed url', parts);
+      this.logger.log('parsed url', parts);
 
         const state = parts['state'];
         let nonceInState = state;
@@ -1297,6 +1310,8 @@ export class OAuthService extends AuthConfig {
             }
         }
 
+      this.logger.log('state ok');
+
         if (parts['error']) {
             this.debug('error trying to login');
             this.handleLoginError(options, parts);
@@ -1305,24 +1320,32 @@ export class OAuthService extends AuthConfig {
             return Promise.reject(err);
         }
 
+      this.logger.log('no error');
+
         const accessToken = parts['access_token'];
         const idToken = parts['id_token'];
         const sessionState = parts['session_state'];
         const grantedScopes = parts['scope'];
 
+      this.logger.log('is oidc?', this.oidc);
+
         if (!this.requestAccessToken && !this.oidc) {
+          this.logger.log('rejection for reason 1');
             return Promise.reject(
                 'Either requestAccessToken or oidc (or both) must be true.'
             );
         }
 
         if (this.requestAccessToken && !accessToken) {
+          this.logger.log('rejection for reason 2');
             return Promise.resolve(false);
         }
         if (this.requestAccessToken && !options.disableOAuth2StateCheck && !state) {
+          this.logger.log('rejection for reason 3');
             return Promise.resolve(false);
         }
         if (this.oidc && !idToken) {
+          this.logger.log('rejection for reason 4');
             return Promise.resolve(false);
         }
 
@@ -1335,11 +1358,13 @@ export class OAuthService extends AuthConfig {
         }
 
         if (this.requestAccessToken && !options.disableOAuth2StateCheck) {
+            this.logger.log('validating nonce');
             const success = this.validateNonceForAccessToken(
                 accessToken,
                 nonceInState
             );
             if (!success) {
+              this.logger.log('rejection for reason 6');
                 const event = new OAuthErrorEvent('invalid_nonce_in_state', null);
                 this.eventsSubject.next(event);
                 return Promise.reject(event);
@@ -1347,6 +1372,7 @@ export class OAuthService extends AuthConfig {
         }
 
         if (this.requestAccessToken) {
+          this.logger.log('storing access token');
             this.storeAccessTokenResponse(
                 accessToken,
                 null,
@@ -1356,6 +1382,7 @@ export class OAuthService extends AuthConfig {
         }
 
         if (!this.oidc) {
+          this.logger.log('not oidc, resolving true');
             this.eventsSubject.next(new OAuthSuccessEvent('token_received'));
             if (this.clearHashAfterLogin && !options.preventClearHashAfterLogin) {
                 location.hash = '';
@@ -1365,6 +1392,8 @@ export class OAuthService extends AuthConfig {
             return Promise.resolve(true);
 
         }
+
+      this.logger.log('is oidc, processing token');
 
         return this.processIdToken(idToken, accessToken)
             .then(result => {
@@ -1453,6 +1482,8 @@ export class OAuthService extends AuthConfig {
         const claimsJson = b64DecodeUnicode(claimsBase64);
         const claims = JSON.parse(claimsJson);
         const savedNonce = this._storage.getItem('nonce');
+
+      this.logger.log('processing id token');
 
         if (Array.isArray(claims.aud)) {
             if (claims.aud.every(v => v !== this.clientId)) {
